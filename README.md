@@ -1,2 +1,2 @@
 # gobot-simulator
-Simulator for gobot
+Simulator for backtesting on historical data
