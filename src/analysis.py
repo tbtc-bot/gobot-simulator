@@ -12,8 +12,8 @@ font = {
         }
 
 
-def plotMetrics(df, figName, savePath=None):
-    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(16, 8), sharex='col')
+def plotMetrics(df, figName, side, savePath=None):
+    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(16, 8), sharex='col')
     fig.suptitle(figName, fontsize=14)
 
     x = df.index
@@ -40,28 +40,18 @@ def plotMetrics(df, figName, savePath=None):
     lbl = ax2b.set_ylabel('%', labelpad=10)
     lbl.set_rotation(0)
 
-    ax3.set_title('PNL-L')
-    ax3.plot(x, df['PNL-L'], linewidth=1, color='red')
-    ax3.fill_between(x, df['PNL-L'][0], df['PNL-L'], alpha=0.5, color='red')
+    pnl = 'PNL-' + side
+    ax3.set_title('PNL')
+    ax3.plot(x, df[pnl], linewidth=1, color='red')
+    ax3.fill_between(x, df[pnl][0], df[pnl], alpha=0.5, color='red')
     lbl = ax3.set_ylabel('$', labelpad=10)
     lbl.set_rotation(0)
     ax3.ticklabel_format(axis='y', useOffset=False)
     ax3b = ax3.twinx()
-    ax3b.plot(x, df['PNL-L'] / df['Equity'] * 100, linewidth=0)
+    ax3b.plot(x, df[pnl] / df['Equity'] * 100, linewidth=0)
     lbl = ax3b.set_ylabel('%', labelpad=10)
     lbl.set_rotation(0)
-
-    ax4.set_title('PNL-S')
-    ax4.plot(x, df['PNL-S'], linewidth=1, color='red')
-    ax4.fill_between(x, df['PNL-S'][0], df['PNL-S'], alpha=0.5, color='red')
-    lbl = ax4.set_ylabel('$', labelpad=10)
-    lbl.set_rotation(0)
-    ax4.ticklabel_format(axis='y', useOffset=False)
-    ax4b = ax4.twinx()
-    ax4b.plot(x, df['PNL-S'] / df['Equity'] * 100, linewidth=0)
-    lbl = ax4b.set_ylabel('%', labelpad=10)
-    lbl.set_rotation(0)
-  
+ 
     fig.tight_layout()
     if savePath is not None:
         fig.savefig(savePath)
@@ -72,78 +62,85 @@ def plotDistributions(df, side, savePath=None):
     gridReached = 'GridReached-'+ side
 
     df[profit] = df['GrossProfit-L']
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(16, 5))
     # fig.suptitle('Distribution of take profits', fontsize=14)
+        
+    ### get grid reached for each profit
+    df_profit = df.loc[(df[profit] != 0)]
+    profitGridCount = df_profit[gridReached].value_counts()
 
-    # get grid reached for each profit
-    profitGridReached = []
-    for i in range(len(df.index)):
-        if df[profit][i] != 0:
-            profitGridReached.append(df[gridReached][i-1]) # TODO change i-1
-
-    data = np.array(profitGridReached)
-    bins = np.arange(-1, data.max() + 0.5) - 0.5
-    ax1.hist(data, bins, rwidth=0.7, density=True)
-    ax1.set_xticks(bins + 0.5)
-    ax1.set_xlim([0.1-1, data.max() + 0.9])
+    data = np.array(profitGridCount)
+    ax1.bar(profitGridCount.index, data)
     ax1.set_title('Distribution of TP grids', fontdict=font)
-    ax1.set_ylabel('Frequency', fontdict=font)
     ax1.set_xlabel('Grid Number', fontdict=font)
 
-    # compute profit contribution of each grid
-    gridProfitDict = {}
-    for i in range(len(df.index)):
-        netProfit = df[profit][i]
+    ax1.set_ylabel('Occurrences', fontdict=font)
+    ax1b = ax1.twinx()
+    ax1b.bar(profitGridCount.index, data/data.sum() * 100)
+    ax1b.set_ylabel('%', labelpad=10, fontdict=font)
 
-        if netProfit != 0:
-            grid = int(df[gridReached][i-1]) # TODO change i-1
-            if grid in gridProfitDict:
-                gridProfitDict[grid] += netProfit
-            else:
-                gridProfitDict[grid] = netProfit
+    ### compute profit contribution of each grid
+    df_profit_distr = df_profit.groupby([gridReached]).sum()
+    df_profit_distr = df_profit_distr[profit]
 
-    # check the sum of grid profits is equal to the total profit
-    totalNetProfit = df[profit].sum()
-    if abs(totalNetProfit - sum(list(gridProfitDict.values()))) > 0.0001:
-        print(totalNetProfit)
-        print(sum(list(gridProfitDict.values())))
-        raise Exception("The sum of the grid profits is not equal to the total profits")
-
-    nGrids = int(max(list(gridProfitDict.keys())))
-    data = []
-    for i in range (nGrids):
-        if (i+1) in gridProfitDict:
-            data.append(gridProfitDict[i+1])
-            # data.append(gridProfitDict[i+1] / abs(df[profit]).sum() * 100)
-        else:
-            gridProfitDict[i] = 0
-            data.append(0)
-
-    # distribution of profits
-    ax2.bar(range(0,nGrids), data)
-    ax2.set_xticks(bins + 0.5)
-    ax2.set_xlim([0.1-1, nGrids + 0.9])
+    data = np.array(df_profit_distr)
+    ax2.bar(df_profit_distr.index, data)
     ax2.set_title('Distribution of profit per grid', fontdict=font)
-    # ax2.set_ylabel('Profit %', fontdict=font)
     ax2.set_xlabel('Grid Number', fontdict=font)
 
-    ax2.set_ylabel('Profit $', labelpad=10, fontdict=font)
+    ax2.set_ylabel('$', labelpad=10, fontdict=font)
     ax2b = ax2.twinx()
-    ax2b.bar(range(0,nGrids), data / abs(df[profit]).sum() * 100)
-    ax2b.set_ylabel('Profit %', labelpad=10, fontdict=font)
+    ax2b.bar(df_profit_distr.index, data / abs(data).sum() * 100)
+    ax2b.set_ylabel('%', labelpad=10, fontdict=font)    
 
     fig.tight_layout()
-    fig.subplots_adjust(wspace=0.15)
+    fig.subplots_adjust(wspace=0.4)
     if savePath is not None:
         fig.savefig(savePath)
 
 
+    ### mean profit per grid
+    df_profit_distr = df_profit.groupby([gridReached]).mean()
+    df_profit_distr = df_profit_distr[profit]
+    ax3.bar(df_profit_distr.index, np.array(df_profit_distr))
+    ax3.set_title('Mean profit per grid', fontdict=font)
+    ax3.set_xlabel('Grid Number', fontdict=font)
+    ax3.set_ylabel('$', labelpad=10, fontdict=font)
+
+
+    ### consecutive tp at grid 0
+    df = df.loc[(df['GrossProfit-L'] != 0)]
+    df['subgroup'] = (df['GridReached-L'] != df['GridReached-L'].shift(1)).cumsum()
+    df = df[df['GridReached-L'] == 0] # drop all rows where grid reached is not 0
+    df = df[['Timestamp', 'GridReached-L', 'subgroup']]    
+    df = df.groupby('subgroup',as_index=False).apply(f)
+    df = df[df['N'] > 1] # remove rows with N==1
+    # print(df.head(10))
+    # print(df['N'].value_counts())
+    # print(df['N'].sum())
+    df = df['N'].value_counts()
+    print(df)
+    # data = np.array(df)
+    # ax4.bar(df.index, data)
+    # ax4.set_title('Distribution of number of consecutive TP at grid 0', fontdict=font)
+    # ax4.set_xlabel('Consecutive TP', fontdict=font)
+    # ax4.set_ylabel('Occurences', labelpad=10, fontdict=font)
+
+
+def f(x):
+    N = x.shape[0]
+    dt = x['Timestamp'].iloc[-1] - x['Timestamp'].iloc[0]
+    return pd.Series([N, dt/N], index=['N', 'mean_time_s'])
+
+
 if __name__ == '__main__':
     folder = "results/"
-    file = "AntiMartingala LONG GO 7, GS 0.30, SF 1.50, OS 1.00, OF 2.00, TS 0.30, SL 0.30.csv"
+    file = "AntiMartingala LONG GO 5, GS 0.30, SF 1.50, OS 1.00, OF 2.00, TS 0.30, SL 0.30.csv"
     df = pd.read_csv(folder + file)
     df.index = [datetime.fromtimestamp(x) for x in df['Timestamp']]
 
-    plotMetrics(df, file)
-    plotDistributions(df, 'L')
+
+    side = 'L'
+    # plotMetrics(df, file, side)
+    plotDistributions(df, side)
     plt.show()

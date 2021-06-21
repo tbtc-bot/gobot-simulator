@@ -176,7 +176,9 @@ func (e *Exchange) executeOrder(order Order) {
 		realizedProfit := e.sessionLong.position.Update(order)
 		e.sessionLong.realizedProfit = realizedProfit
 		e.balance += realizedProfit
-		e.sessionLong.gridReached = order.GridNumber
+		if !order.IsTP { // don't update grid reached to 0 if is TP order, this is for the statistics
+			e.sessionLong.gridReached = order.GridNumber
+		}
 		log.Debugf("Exchange: updated position %s", e.sessionLong.position.String())
 		e.NotifyPositionUpdateCallback(e.sessionLong.position)
 	} else {
@@ -190,7 +192,9 @@ func (e *Exchange) executeOrder(order Order) {
 		realizedProfit := e.sessionShort.position.Update(order)
 		e.sessionShort.realizedProfit = realizedProfit
 		e.balance += realizedProfit
-		e.sessionShort.gridReached = order.GridNumber
+		if !order.IsTP { // don't update grid reached to 0 if is TP order, this is for the statistics
+			e.sessionShort.gridReached = order.GridNumber
+		}
 		log.Debugf("Exchange: updated position %s", e.sessionShort.position.String())
 		e.NotifyPositionUpdateCallback(e.sessionShort.position)
 	}
