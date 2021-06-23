@@ -77,3 +77,9 @@ func (s *SimulatorResult) WriteToFile(filepath string) error {
 	datawriter.Flush()
 	return nil
 }
+
+func (s *SimulatorResult) Performance() float64 {
+	first := s.statusHistory[0]
+	last := s.statusHistory[len(s.statusHistory)-1]
+	return last.Equity - first.Equity
+}

@@ -117,6 +117,8 @@ func (e *Exchange) GetAPI() *ExchangeAPI {
 		MarkPrice:   e.getMarkPrice,
 		Balance:     e.getBalance,
 		GridReached: e.getGridReached,
+		Position:    e.getPosition,
+		CurrentTime: e.getCurrentTime,
 	}
 }
 
@@ -261,4 +263,16 @@ func (e *Exchange) getGridReached(positionSide PositionSideType) int64 {
 	} else {
 		return e.sessionShort.gridReached
 	}
+}
+
+func (e *Exchange) getPosition(positionSide PositionSideType) Position {
+	if positionSide == PositionSideLong {
+		return e.sessionLong.position
+	} else {
+		return e.sessionShort.position
+	}
+}
+
+func (e *Exchange) getCurrentTime() time.Time {
+	return e.time
 }

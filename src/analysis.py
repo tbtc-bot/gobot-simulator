@@ -13,7 +13,7 @@ font = {
 
 
 def plotMetrics(df, figName, side, savePath=None):
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(16, 8), sharex='col')
+    fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(16, 8), sharex='col')
     fig.suptitle(figName, fontsize=14)
 
     x = df.index
@@ -30,7 +30,7 @@ def plotMetrics(df, figName, side, savePath=None):
     lbl.set_rotation(0)
 
     ax2.set_title('Equity')
-    ax2.plot(x, df['Equity'], linewidth=1)
+    ax2.plot(x, df['Equity'], linewidth=0.5)
     ax2.fill_between(x, df['Equity'][0], df['Equity'], alpha=0.5)
     lbl = ax2.set_ylabel('$', labelpad=10)
     lbl.set_rotation(0)
@@ -41,15 +41,32 @@ def plotMetrics(df, figName, side, savePath=None):
     lbl.set_rotation(0)
 
     pnl = 'PNL-' + side
-    ax3.set_title('PNL')
-    ax3.plot(x, df[pnl], linewidth=1, color='red')
-    ax3.fill_between(x, df[pnl][0], df[pnl], alpha=0.5, color='red')
+    ax3.set_title('Unrealized PNL')
+    ax3.plot(x, df[pnl], linewidth=0)
+    ax3.fill_between(x, df[pnl][0], df[pnl], where=df[pnl]>0, alpha=0.5, color='green')
+    ax3.fill_between(x, df[pnl][0], df[pnl], where=df[pnl]<0, alpha=0.5, color='red')
     lbl = ax3.set_ylabel('$', labelpad=10)
     lbl.set_rotation(0)
     ax3.ticklabel_format(axis='y', useOffset=False)
     ax3b = ax3.twinx()
     ax3b.plot(x, df[pnl] / df['Equity'] * 100, linewidth=0)
     lbl = ax3b.set_ylabel('%', labelpad=10)
+    lbl.set_rotation(0)
+
+    ax4.set_title('Equity + Unrealized PNL')
+    df['equity+pnl'] = df['Equity'] + df[pnl]
+    ax4.plot(x, df['equity+pnl'], linewidth=0.5)
+    ax4.fill_between(x, df['Equity'][0], df['equity+pnl'], alpha=0.5)
+    # ax4.fill_between(x, df['Equity'], df['equity+pnl'], where=df[pnl]>=0, alpha=0.5, color='green')
+    # ax4.fill_between(x, df['equity+pnl'], df['Equity'], where=df[pnl]<0, alpha=0.5, color='red')
+    # ax4.fill_between(x, df['Equity'][0], df['Equity'], where=df[pnl]>=0, alpha=0.5)
+    # ax4.fill_between(x, df['Equity'][0], df['equity+pnl'], where=df[pnl]<0, alpha=0.5)
+    lbl = ax4.set_ylabel('$', labelpad=10)
+    lbl.set_rotation(0)
+    ax4.ticklabel_format(axis='y', useOffset=False)
+    ax4b = ax4.twinx()
+    ax4b.plot(x, (df['equity+pnl'] - e0) / e0 * 100, linewidth=0)
+    lbl = ax4b.set_ylabel('%', labelpad=10)
     lbl.set_rotation(0)
  
     fig.tight_layout()
@@ -107,7 +124,7 @@ def plotDistributions(df, side, savePath=None):
     ax3.set_xlabel('Grid Number', fontdict=font)
     ax3.set_ylabel('$', labelpad=10, fontdict=font)
 
-
+    return
     ### consecutive tp at grid 0
     df = df.loc[(df['GrossProfit-L'] != 0)]
     df['subgroup'] = (df['GridReached-L'] != df['GridReached-L'].shift(1)).cumsum()
@@ -141,6 +158,6 @@ if __name__ == '__main__':
 
 
     side = 'L'
-    # plotMetrics(df, file, side)
+    plotMetrics(df, file, side)
     plotDistributions(df, side)
     plt.show()

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"math"
+	"time"
 
 	"example.com/gobot-simulator/src/common"
 	"example.com/gobot-simulator/src/engine"
@@ -11,17 +12,20 @@ import (
 )
 
 type Worker struct {
-	strategy    strategy.IStrategy
-	exchangeAPI *engine.ExchangeAPI
+	strategy            strategy.StrategyWrapper
+	exchangeAPI         *engine.ExchangeAPI
+	lastTimeCreatedGrid time.Time // this is used in AntiMartingala to recreate the grid if after some time has still no position
 }
 
-func NewWorker(strategy strategy.IStrategy) *Worker {
-	return &Worker{
-		strategy: strategy,
-	}
+func NewWorker() *Worker {
+	return &Worker{}
 }
 
 // PUBLIC METHODS
+func (w *Worker) SetStrategy(strategy strategy.StrategyWrapper) {
+	w.strategy = strategy
+}
+
 func (w *Worker) SetExchangeAPI(api *engine.ExchangeAPI) {
 	w.exchangeAPI = api
 }
@@ -36,6 +40,7 @@ func (w *Worker) HandlePositionUpdate(position engine.Position) {
 
 func (w *Worker) StartStrategy() {
 	log.Debug("Worker: start strategy")
+	// w.lastTimeCreatedGrid = w.exchangeAPI.CurrentTime()
 	symbol := w.strategy.GetSymbol()
 	balance := w.exchangeAPI.Balance()
 	markPrice := w.exchangeAPI.MarkPrice()
@@ -56,6 +61,20 @@ func (w *Worker) StartStrategy() {
 		order = *engine.NewOrderMarket(symbol, engine.SideSell, engine.PositionSideShort, s0)
 	}
 	w.placeOrder(order)
+}
+
+func (w *Worker) HandleGridRecreation(time time.Time) {
+	position := w.exchangeAPI.Position(w.strategy.GetPositionSide())
+	if position.Size > 0 {
+		w.lastTimeCreatedGrid = time
+		return
+	}
+
+	diffMinutes := time.Sub(w.lastTimeCreatedGrid).Minutes()
+	if diffMinutes > 3 {
+		log.Debug("Worker recreates grid because more than 3 mins have passed without having a position")
+		w.StartStrategy()
+	}
 }
 
 // PRIVATE METHODS

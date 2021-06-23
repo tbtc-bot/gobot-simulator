@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"log"
 	"math"
 	"time"
 
@@ -69,57 +68,38 @@ func (s *StrategyAntiMartingala) SellGridOrders(balance float64, startPrice floa
 func (s *StrategyAntiMartingala) TakeProfitOrder(position engine.Position, currentGrid int64) *engine.Order {
 	markPrice := position.MarkPrice
 	entryPrice := position.EntryPrice
+	stopLossThreshold := 0.1
 
-	// if last grid has been reached
-	// if currentGrid == int64(s.Parameters.GO) {
-	// 	if s.PositionSide == engine.PositionSideLong {
-	// 		takeProfitPrice := markPrice * (1 + 5*s.Parameters.SL/100)
-	// 		order := engine.NewOrderLimit(s.Symbol, engine.SideSell, engine.PositionSideLong, position.Size, takeProfitPrice)
-	// 		order.IsTP = true
-	// 		return order
-	// 	} else {
-	// 		takeProfitPrice := markPrice * (1 - 5*s.Parameters.SL/100)
-	// 		order := engine.NewOrderLimit(s.Symbol, engine.SideBuy, engine.PositionSideShort, math.Abs(position.Size), takeProfitPrice)
-	// 		order.IsTP = true
-	// 		return order
-	// 	}
-
-	// set stop loss
-	if currentGrid < 3 {
-		if s.PositionSide == engine.PositionSideLong {
-			takeProfitPrice := entryPrice * (1 - s.Parameters.SL/100)
-			order := engine.NewOrderStop(s.Symbol, engine.SideSell, engine.PositionSideLong, position.Size, takeProfitPrice, takeProfitPrice)
+	if s.PositionSide == engine.PositionSideLong {
+		isStopLoss := entryPrice*(1+stopLossThreshold/100) >= markPrice
+		if isStopLoss {
+			stopLossPrice := entryPrice * (1 - s.Parameters.SL/100)
+			order := engine.NewOrderStop(s.Symbol, engine.SideSell, engine.PositionSideLong, position.Size, stopLossPrice, stopLossPrice)
 			order.IsTP = true
 			return order
 		} else {
-			takeProfitPrice := entryPrice * (1 + s.Parameters.SL/100)
-			order := engine.NewOrderStop(s.Symbol, engine.SideBuy, engine.PositionSideShort, math.Abs(position.Size), takeProfitPrice, takeProfitPrice)
-			order.IsTP = true
-			return order
-		}
-
-		// set take profit
-	} else if currentGrid >= 3 {
-		if s.PositionSide == engine.PositionSideLong {
 			// TODO
 			// takeProfitPrice := math.Pow(position.EntryPrice, s.Parameters.TS) * math.Pow(markPrice, 1-s.Parameters.TS)
 			// takeProfitPrice := entryPrice * (1 + float64(currentGrid)/2*s.Parameters.SL/100)
-			takeProfitPrice := entryPrice + (markPrice-entryPrice)*(float64(currentGrid)/float64(s.Parameters.GO))*0.9
+			// takeProfitPrice := entryPrice + (markPrice-entryPrice)*(float64(currentGrid)/float64(s.Parameters.GO))*0.9
+			takeProfitPrice := entryPrice + (markPrice-entryPrice)/2
 			order := engine.NewOrderStop(s.Symbol, engine.SideSell, engine.PositionSideLong, position.Size, takeProfitPrice, takeProfitPrice)
 			order.IsTP = true
 			return order
+		}
+	} else {
+		isStopLoss := entryPrice*(1-stopLossThreshold/100) <= markPrice
+		if isStopLoss {
+			stopLossPrice := entryPrice * (1 + s.Parameters.SL/100)
+			order := engine.NewOrderStop(s.Symbol, engine.SideBuy, engine.PositionSideShort, math.Abs(position.Size), stopLossPrice, stopLossPrice)
+			order.IsTP = true
+			return order
 		} else {
-			// takeProfitPrice := math.Pow(position.EntryPrice, s.Parameters.TS) * math.Pow(markPrice, 1-s.Parameters.TS)
-			// takeProfitPrice := entryPrice * (1 - float64(currentGrid)/2*s.Parameters.SL/100)
 			takeProfitPrice := entryPrice - (entryPrice-markPrice)/2
 			order := engine.NewOrderStop(s.Symbol, engine.SideBuy, engine.PositionSideShort, math.Abs(position.Size), takeProfitPrice, takeProfitPrice)
 			order.IsTP = true
 			return order
 		}
-
-	} else {
-		log.Panicf("Current grid not valid %d", currentGrid)
-		return nil
 	}
 }
 

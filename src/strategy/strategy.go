@@ -28,7 +28,7 @@ func (sp StrategyParameters) String() string {
 	return fmt.Sprintf("GO %d, GS %.2f, SF %.2f, OS %.2f, OF %.2f, TS %.2f, SL %.2f", sp.GO, sp.GS, sp.SF, sp.OS, sp.OF, sp.TS, sp.SL)
 }
 
-type IStrategy interface {
+type StrategyWrapper interface {
 	GetType() StrategyType
 	GetSymbol() string
 	GetPositionSide() engine.PositionSideType
@@ -48,8 +48,8 @@ type Strategy struct {
 	Type StrategyType `json:"type"`
 }
 
-func NewStrategy(strategyType StrategyType, symbol string, positionSide engine.PositionSideType, pars StrategyParameters) *IStrategy {
-	var strategy IStrategy
+func NewStrategy(strategyType StrategyType, symbol string, positionSide engine.PositionSideType, pars StrategyParameters) *StrategyWrapper {
+	var strategy StrategyWrapper
 	switch strategyType {
 	case StrategyTypeMartingala:
 		strategy = NewStrategyMartingala(symbol, positionSide, pars)
