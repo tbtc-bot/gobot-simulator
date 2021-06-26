@@ -2,7 +2,9 @@ package common
 
 import (
 	"bufio"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -10,87 +12,138 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type SymbolData []SymbolDataItem
-
 type SymbolDataItem struct {
 	Time  time.Time
 	Price float64
 }
 
-func NewSymbolData(filePath string) SymbolData {
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Panic(err)
-	}
+type SymbolData struct {
+	Symbol    string
+	StartDate string
+	EndDate   string
+	Data      []SymbolDataItem
+}
+
+func (d *SymbolData) readFromFile(path string) {
+	file, err := os.Open(path)
+	failOnError(err, fmt.Sprintf("Could not open file %s", path))
 	defer file.Close()
 
+	d.Data = make([]SymbolDataItem, 0)
 	scanner := bufio.NewScanner(file)
-	scanner.Scan()
-	log.Info("Reading file: ", filePath)
-
-	symbolData := make(SymbolData, 0)
+	scanner.Scan() // skip header
 	for scanner.Scan() {
 		line := scanner.Text()
 		values := strings.Split(line, ",")
 
 		timestamp, err := strconv.ParseFloat(values[1], 64)
-		if err != nil {
-			log.Panic("Error parsing timestamp")
-		}
+		failOnError(err, "Error parsing timestamp")
 		price, err := strconv.ParseFloat(values[2], 64)
-		if err != nil {
-			log.Panic("Error parsing price")
-		}
-		symbolData = append(symbolData, SymbolDataItem{Time: time.Unix(int64(timestamp), 0), Price: price})
+		failOnError(err, "Error parsing price")
+
+		d.Data = append(d.Data, SymbolDataItem{Time: time.Unix(int64(timestamp), 0), Price: price})
+	}
+	err = scanner.Err()
+	failOnError(err, "Scanner error")
+
+	// TODO set symbol
+	d.StartDate = d.Data[0].Time.UTC().String()
+	d.EndDate = d.Data[len(d.Data)-1].Time.UTC().String()
+}
+
+func (d *SymbolData) append(symbolData *SymbolData) {
+	// TODO check that symbolData.startDate is after d.endDate
+	d.Data = append(d.Data, symbolData.Data...)
+	d.EndDate = symbolData.EndDate
+}
+
+func (d *SymbolData) writeToFile(filePath string) error {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	datawriter := bufio.NewWriter(file)
+	_, err = datawriter.WriteString("Timestamp,Price\n")
+	if err != nil {
+		log.Error("Error writing header of file")
 	}
 
+	for _, di := range d.Data {
+		_, err = datawriter.WriteString(fmt.Sprintf("%d,%f\n", di.Time.Unix(), di.Price))
+		if err != nil {
+			log.Error("Error writing status to result file")
+		}
+	}
+	datawriter.Flush()
+	return nil
+}
+
+func NewSymbolDataFromProcessedFile(filePath string) *SymbolData {
+	symbolData := &SymbolData{}
+	symbolData.readFromFile(filePath)
 	return symbolData
 }
 
-// func NewSymbolData(dataFolder string) SymbolData {
-// 	symbolData := make(SymbolData, 0)
+func NewSymbolDataFromTickDataFolder(folderPath string) *SymbolData {
+	var files []string
+	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
+		if filepath.Ext(path) == ".csv" {
+			files = append(files, path)
+		}
+		return nil
+	})
+	failOnError(err, fmt.Sprintf("Could not get files in folder %s", folderPath))
 
-// 	var files []string
-// 	err := filepath.Walk(dataFolder, func(path string, info os.FileInfo, err error) error {
-// 		if filepath.Ext(path) == ".csv" {
-// 			files = append(files, path)
-// 		}
-// 		return nil
-// 	})
-// 	if err != nil {
-// 		log.Panic(err)
-// 	}
-// 	for _, f := range files {
-// 		file, err := os.Open(f)
-// 		if err != nil {
-// 			log.Panic(err)
-// 		}
-// 		defer file.Close()
+	symbolData := &SymbolData{}
+	for _, file := range files {
+		symbolData.append(processTickData(file))
+	}
 
-// 		scanner := bufio.NewScanner(file)
+	// TODO set symbol
+	symbolData.StartDate = symbolData.Data[0].Time.UTC().String()
+	symbolData.EndDate = symbolData.Data[len(symbolData.Data)-1].Time.UTC().String()
 
-// 		scanner.Scan()
-// 		log.Info("Reading file: ", f)
+	symbolData.writeToFile("../datasets/DOGE_1s.csv")
+	return symbolData
+}
 
-// 		rows := 0
-// 		last_timestamp := 0
-// 		for scanner.Scan() {
-// 			line := scanner.Text()
-// 			values := strings.Split(line, ",")
+func processTickData(filePath string) *SymbolData {
+	log.Infof("Processing tick data file: %s", filePath)
 
-// 			price, _ := strconv.ParseFloat(values[2], 64)
-// 			timestamp, _ := strconv.Atoi(values[5])
-// 			if timestamp >= (last_timestamp + 1000) {
-// 				rows++
-// 				last_timestamp = timestamp
-// 				symbolData = append(symbolData, SymbolDataItem{Time: time.Unix(int64(timestamp/1000), 0), Price: price})
-// 			}
-// 		}
+	file, err := os.Open(filePath)
+	failOnError(err, fmt.Sprintf("Could not open file %s", filePath))
+	defer file.Close()
 
-// 		if err := scanner.Err(); err != nil {
-// 			log.Panic(err)
-// 		}
-// 	}
+	symbolData := &SymbolData{}
+	symbolData.Data = make([]SymbolDataItem, 0)
+	scanner := bufio.NewScanner(file)
+	scanner.Scan() // skip header
 
-// 	return symbolData
-// }
+	lastTimestamp := 0
+	for scanner.Scan() {
+		line := scanner.Text()
+		values := strings.Split(line, ",")
+
+		timestamp, err := strconv.Atoi(values[5])
+		timestamp /= 1000 // convert to seconds
+		failOnError(err, "Error parsing timestamp")
+		price, err := strconv.ParseFloat(values[2], 64)
+		failOnError(err, "Error parsing price")
+
+		if timestamp >= (lastTimestamp + 1) { // append new value only if 1 second has passed
+			lastTimestamp = timestamp
+			symbolData.Data = append(symbolData.Data, SymbolDataItem{Time: time.Unix(int64(lastTimestamp), 0), Price: price})
+		}
+	}
+	err = scanner.Err()
+	failOnError(err, "Scanner error")
+	return symbolData
+}
+
+func failOnError(err error, msg string) {
+	if err != nil {
+		log.Panic(msg)
+	}
+}
